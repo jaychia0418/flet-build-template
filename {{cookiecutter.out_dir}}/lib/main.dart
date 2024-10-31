@@ -22,7 +22,7 @@ const pythonModuleName = "{{ cookiecutter.python_module_name }}";
 final hideLoadingPage =
     bool.tryParse("{{ cookiecutter.hide_loading_animation }}".toLowerCase()) ??
         true;
-const outLogFilename = "out.log";
+const outLogFilename = "console.log";
 const errorExitCode = 100;
 
 List<CreateControlFactory> createControlFactories = [
@@ -55,9 +55,10 @@ if os.getenv("FLET_PLATFORM") == "android":
 
     ssl._create_default_https_context = create_default_context
 
-out_file = open("$outLogFilename", "w+", buffering=1)
+app_temp_dir = os.getenv("FLET_APP_TEMP")
+out_file = open(os.path.join(app_temp_dir, "$outLogFilename"), "w+", buffering=1)
 
-callback_socket_addr = os.environ.get("FLET_PYTHON_CALLBACK_SOCKET_ADDR")
+callback_socket_addr = os.getenv("FLET_PYTHON_CALLBACK_SOCKET_ADDR")
 if ":" in callback_socket_addr:
     addr, port = callback_socket_addr.split(":")
     callback_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -77,6 +78,7 @@ sys.exit = flet_exit
 
 ex = None
 try:
+    sys.argv = [{argv}]
     runpy.run_module("{module_name}", run_name="__main__")
 except Exception as e:
     ex = e
@@ -91,7 +93,7 @@ String assetsDir = "";
 String appDir = "";
 Map<String, String> environmentVariables = {};
 
-void main() async {
+void main([List<String>? args]) async {
   if (isProduction) {
     // ignore: avoid_returning_null_for_void
     debugPrint = (String? message, {int? wrapWidth}) => null;
@@ -114,7 +116,7 @@ void main() async {
                   createControlFactories: createControlFactories
                 )
               : FutureBuilder(
-                  future: runPythonApp(),
+                  future: runPythonApp(args),
                   builder:
                       (BuildContext context, AsyncSnapshot<String?> snapshot) {
                     if (snapshot.hasData || snapshot.hasError) {
@@ -204,8 +206,11 @@ Future prepareApp() async {
   return "";
 }
 
-Future<String?> runPythonApp() async {
-  var script = pythonScript.replaceAll('{module_name}', pythonModuleName);
+Future<String?> runPythonApp(List<String>? args) async {
+
+  var argvItems = args?.map((a) => "\"${a.replaceAll('"', '\\"')}\"");
+  var argv = "[${argvItems != null ? argvItems.join(',') : ''}]";
+  var script = pythonScript.replaceAll('{module_name}', pythonModuleName).replaceAll('{argv}', argv);
 
   var completer = Completer<String>();
 
